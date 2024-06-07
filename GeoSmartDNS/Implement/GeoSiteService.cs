@@ -15,8 +15,6 @@ namespace GeoSmartDNS.Implement
         private readonly ILogger<GeoSiteService> _logger;
         private readonly IOptions<DnsConfig> _dnsConfig;
 
-        //DnsServer
-        private Dictionary<string, NameServerAddress[]> _dnsServerDic = new Dictionary<string, NameServerAddress[]>(StringComparer.InvariantCultureIgnoreCase);
         //GeoSite
         private Dictionary<string, GeoSite> _geoDictionary = new Dictionary<string, GeoSite>(StringComparer.InvariantCultureIgnoreCase);
         public GeoSiteService(IMemoryCache memoryCache,
@@ -28,26 +26,7 @@ namespace GeoSmartDNS.Implement
             _dnsConfig = dnsConfig;
         }
 
-        private void Installation()
-        {
-            //dns上游服务器安装
-            foreach (var dnsServer in _dnsConfig.Value.DnsServers)
-            {
-                var _dnsServers = new List<NameServerAddress>();
-                DnsTransportProtocol protocol = (DnsTransportProtocol)Enum.Parse(typeof(DnsTransportProtocol), dnsServer.ForwarderProtocol, true);
-                foreach (var dns in dnsServer.ForwarderAddresses)
-                {
-                    var nameServer = NameServerAddress.Parse(dns);
-             
-                    if (nameServer.Protocol != protocol)
-                        nameServer = nameServer.ChangeProtocol(protocol);
-
-                    _dnsServers.Add(nameServer);
-                }
-                _dnsServerDic[dnsServer.Name] = _dnsServers.ToArray();
-            }
-
-        }
+       
 
         public async Task LoadGeoSiteFile(string path)
         {
@@ -62,10 +41,7 @@ namespace GeoSmartDNS.Implement
             {
                 _geoDictionary[item.CountryCode] = item;
             }
-            Installation();
         }
-
-
 
 
         public bool IsMatchingDomain(string domain, params string[] countryCodes)
@@ -102,36 +78,6 @@ namespace GeoSmartDNS.Implement
                 }
             }
             return false;
-        }
-
-
-        public DnsClient GetDnsClient(string domain)
-        {
-            Stopwatch sw = Stopwatch.StartNew();
-            var dnsName = GetDnsNameServer(domain);
-            long s = sw.ElapsedMilliseconds;
-            sw.Stop();
-            var nameServers = _dnsServerDic[dnsName];
-            if(nameServers == null)
-            {
-                throw new Exception($"DnsName:{dnsName} Undefined!");
-            }
-            _logger.LogInformation($"域名:{domain}\t命中规则:{dnsName}，耗时:{s}");
-            var config = _dnsConfig.Value.DnsServers.FirstOrDefault(x => x.Name == dnsName);
-            var dnsClient = new DnsClient(nameServers);
-            dnsClient.Concurrency = nameServers.Length;
-            dnsClient.Retries = 5;
-            dnsClient.Timeout = 2000;
-            dnsClient.Cache = new DnsCache();
-            if (!string.IsNullOrEmpty(config.Proxy))
-            {
-                var proxyServer = _dnsConfig.Value.ProxyServers.FirstOrDefault(x => x.Name == config.Proxy);
-                if(proxyServer != null)
-                {
-                    dnsClient.Proxy = NetProxy.CreateSocksProxy(proxyServer.ProxyAddress,proxyServer.ProxyPort);
-                }
-            }
-            return dnsClient;
         }
 
 

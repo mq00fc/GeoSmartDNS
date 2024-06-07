@@ -10,6 +10,6 @@ namespace GeoSmartDNS.Implement
 
         bool IsMatchingDomain(string domain, params string[] countryCodes);
 
-        DnsClient GetDnsClient(string domain);
+        string GetDnsNameServer(string domain);
     }
 }

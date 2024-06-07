@@ -10,17 +10,22 @@ namespace GeoSmartDNS.HostService
     {
         private readonly ILogger<UdpDnsServerService> _logger;
         private readonly IGeoSiteService _geoSiteService;
+        private readonly IDnsService _dnsService;
 
         public UdpDnsServerService(
             ILogger<UdpDnsServerService> logger,
-            IGeoSiteService geoSiteService)
+            IGeoSiteService geoSiteService,
+            IDnsService dnsService)
         {
             _logger = logger;
             _geoSiteService = geoSiteService;
+            _dnsService = dnsService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _dnsService.Installation();
+
             using UdpClient udpServer = new UdpClient(5383);
             udpServer.EnableBroadcast = false;
             while (!stoppingToken.IsCancellationRequested)
@@ -31,8 +36,7 @@ namespace GeoSmartDNS.HostService
                     await Task.Run(async () =>
                     {
                         IPEndPoint remoteEP = result.RemoteEndPoint;
-                        byte[] requestData = result.Buffer;
-                        byte[] responseData = await HandleDnsRequest(requestData);
+                        byte[] responseData = await _dnsService.HandleDnsRequest(result.Buffer);
                         await udpServer.SendAsync(responseData, responseData.Length, remoteEP);
                     });
                 }
@@ -41,7 +45,7 @@ namespace GeoSmartDNS.HostService
                 {
 
                 }
-                catch(OperationCanceledException)
+                catch (OperationCanceledException)
                 {
 
                 }
@@ -52,33 +56,6 @@ namespace GeoSmartDNS.HostService
             }
 
             udpServer.Close();
-        }
-
-        private async Task<byte[]> HandleDnsRequest(byte[] requestData)
-        {
-            DnsDatagram dnsRequest;
-            using (MemoryStream ms = new MemoryStream())
-            {
-                await ms.WriteAsync(requestData, 0, requestData.Length);
-                ms.Position = 0; // 读取前将位置重置为0
-                dnsRequest = DnsDatagram.ReadFrom(ms);
-            }
-
-
-            var domain = dnsRequest.Question[0].Name;
-
-            var dnsClient = _geoSiteService.GetDnsClient(domain);
-
-            Stopwatch sw = Stopwatch.StartNew();
-            DnsDatagram dnsResponse = await dnsClient.ResolveAsync(dnsRequest);
-            _logger.LogInformation($"域名:{domain}，解析耗时:{sw.ElapsedMilliseconds}ms");
-
-
-            using (MemoryStream ms = new MemoryStream())
-            {
-                dnsResponse.WriteTo(ms);
-                return ms.ToArray();
-            }
         }
     }
 }

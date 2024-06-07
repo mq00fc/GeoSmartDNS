@@ -12,12 +12,15 @@ namespace GeoSmartDNS.Controllers
     {
         private readonly ILogger<DnsController> _logger;
         private readonly IGeoSiteService _geoSiteService;
+        private readonly IDnsService _dnsService;
         public DnsController(
             ILogger<DnsController> logger,
-            IGeoSiteService geoSiteService)
+            IGeoSiteService geoSiteService,
+            IDnsService dnsService)
         {
             _logger = logger;
             _geoSiteService = geoSiteService;
+            _dnsService = dnsService;
         }
 
         [HttpGet("/dns-query")]
@@ -55,26 +58,9 @@ namespace GeoSmartDNS.Controllers
             if (x > 0)
                 dns = dns.PadRight(dns.Length - x + 4, '=');
 
-            DnsDatagram dnsRequest;
-            using (MemoryStream mS = new MemoryStream(Convert.FromBase64String(dns)))
-            {
-                dnsRequest = DnsDatagram.ReadFrom(mS);
-            }
-
-            var domain = dnsRequest.Question[0].Name;
-
-            var dnsClient = _geoSiteService.GetDnsClient(domain);
-
-            DnsDatagram dnsResponse = await dnsClient.ResolveAsync(dnsRequest);
-
-            using (MemoryStream ms = new MemoryStream())
-            {
-                dnsResponse.WriteTo(ms);
-                ms.Position = 0;
-                HttpContext.Response.ContentType = "application/dns-message";
-                HttpContext.Response.StatusCode = 200;
-                await HttpContext.Response.Body.WriteAsync(ms.ToArray());
-            }
+            HttpContext.Response.ContentType = "application/dns-message";
+            HttpContext.Response.StatusCode = 200;
+            await HttpContext.Response.Body.WriteAsync(await _dnsService.HandleDnsRequest(Convert.FromBase64String(dns)));
 
             return new EmptyResult();
         }
@@ -90,28 +76,17 @@ namespace GeoSmartDNS.Controllers
                 return StatusCode(415);
             }
 
-            DnsDatagram dnsRequest;
+
             using (MemoryStream ms = new MemoryStream())
             {
                 await request.Body.CopyToAsync(ms);
                 ms.Position = 0;
-                dnsRequest = DnsDatagram.ReadFrom(ms);
-            }
-
-            var domain = dnsRequest.Question[0].Name;
-            var dnsClient = _geoSiteService.GetDnsClient(domain);
-
-            DnsDatagram dnsResponse = await dnsClient.ResolveAsync(dnsRequest);
-
-            using (MemoryStream ms = new MemoryStream())
-            {
-                dnsResponse.WriteTo(ms);
-                ms.Position = 0;
                 HttpContext.Response.ContentType = "application/dns-message";
                 HttpContext.Response.StatusCode = 200;
-                await HttpContext.Response.Body.WriteAsync(ms.ToArray());
+                await HttpContext.Response.Body.WriteAsync(await _dnsService.HandleDnsRequest(ms.ToArray()));
             }
 
+      
             return new EmptyResult();
         }
     }

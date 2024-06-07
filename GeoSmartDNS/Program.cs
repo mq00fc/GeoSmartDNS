@@ -27,7 +27,9 @@ namespace GeoSmartDNS
             builder.Services.Configure<DnsConfig>(configurationRoot.GetSection("SmartDnsConfig"));
             builder.Services.AddSingleton<IConfigurationRoot>(configurationRoot);
 
+            builder.Services.AddSingleton<IDnsService, DnsService>();
             builder.Services.AddSingleton<IGeoSiteService, GeoSiteService>();
+
 
             //系统启动预备
             builder.Services.AddHostedService<GeoSmartDnsService>();
