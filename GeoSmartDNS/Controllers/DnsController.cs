@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using GeoSmartDNS.Implement;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -58,9 +59,15 @@ namespace GeoSmartDNS.Controllers
             if (x > 0)
                 dns = dns.PadRight(dns.Length - x + 4, '=');
 
+            var buffer = await _dnsService.HandleDnsRequest(Convert.FromBase64String(dns));
+            if(buffer == null)
+            {
+                return BadRequest();
+            }
+
             HttpContext.Response.ContentType = "application/dns-message";
             HttpContext.Response.StatusCode = 200;
-            await HttpContext.Response.Body.WriteAsync(await _dnsService.HandleDnsRequest(Convert.FromBase64String(dns)));
+            await HttpContext.Response.Body.WriteAsync(buffer);
 
             return new EmptyResult();
         }
@@ -77,13 +84,19 @@ namespace GeoSmartDNS.Controllers
             }
 
 
+          
             using (MemoryStream ms = new MemoryStream())
             {
                 await request.Body.CopyToAsync(ms);
                 ms.Position = 0;
                 HttpContext.Response.ContentType = "application/dns-message";
                 HttpContext.Response.StatusCode = 200;
-                await HttpContext.Response.Body.WriteAsync(await _dnsService.HandleDnsRequest(ms.ToArray()));
+                var buffer = await _dnsService.HandleDnsRequest(ms.ToArray());
+                if (buffer == null)
+                {
+                    return BadRequest();
+                }
+                await HttpContext.Response.Body.WriteAsync(buffer);
             }
 
       

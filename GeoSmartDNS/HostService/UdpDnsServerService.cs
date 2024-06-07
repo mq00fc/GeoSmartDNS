@@ -24,7 +24,7 @@ namespace GeoSmartDNS.HostService
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _dnsService.Installation();
+            DnsServer dnsServer = new DnsServer();
 
             using UdpClient udpServer = new UdpClient(5383);
             udpServer.EnableBroadcast = false;
@@ -37,6 +37,11 @@ namespace GeoSmartDNS.HostService
                     {
                         IPEndPoint remoteEP = result.RemoteEndPoint;
                         byte[] responseData = await _dnsService.HandleDnsRequest(result.Buffer);
+                        if(responseData == null)
+                        {
+                            return;
+                        }
+
                         await udpServer.SendAsync(responseData, responseData.Length, remoteEP);
                     });
                 }
@@ -47,7 +52,7 @@ namespace GeoSmartDNS.HostService
                 }
                 catch (OperationCanceledException)
                 {
-
+                   // GC.Collect();
                 }
                 catch (Exception ex)
                 {
